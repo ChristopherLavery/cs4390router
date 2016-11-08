@@ -1,8 +1,8 @@
 # Mininet Router
-A simple IP router for CS4390 (Computer Networks) using mininet.
+A simple IP router for CS4390 (Computer Networks) using mininet. For setup, use https://github.com/mininet/mininet/wiki/Simple-Router
 
 ##Tasks
-Following https://github.com/mininet/mininet/wiki/Simple-Router ...
+
 
 | Item                                                                                	| Points 	|
 |-------------------------------------------------------------------------------------	|--------	|
