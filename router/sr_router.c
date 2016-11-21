@@ -170,10 +170,70 @@ void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req,
       /*********************************************************************/
       /* TODO: send ICMP host uncreachable to the source address of all    */
       /* packets waiting on this request                                   */
+      
+/****** End Task 4-pt3  ******/
+      size_t eth_hdr_size = sizeof(sr_ethernet_hdr_t);
+      size_t ip_hdr_size = sizeof(sr_ip_hdr_t);
+      size_t icmp_hdr_size = sizeof(sr_icmp_t3_hdr_t);
 
+      size_t total_hdr_size = eth_hdr_size + ip_hdr_size + icmp_hdr_size;
 
+      /*  Iterate through list of packets */
+      struct sr_packet *packet;
+      for (packet = req->packets; packet != NULL; packet = packet->next) 
+      {
+          
+          /*  Grab packet buffer from this packet in the queue */
+          uint8_t *buf = packet->buf;
 
+          /*  Create the packet buffer to hold ICMP Host Unreachable message */
+          uint8_t *pkt = (uint8_t *) malloc(total_hdr_size);
 
+          /* Identify ethernet and ip headers of packet from the queue */
+          sr_ethernet_hdr_t *old_eth_hdr = (sr_ethernet_hdr_t  *) buf;
+          sr_ip_hdr_t *old_ip_hdr = (sr_ip_hdr_t *)(buf + eth_hdr_size);
+
+          /*  Popoulate ethernet header */
+          sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t *) pkt;
+          eth_hdr->ether_type = htons(ethertype_ip);
+          memcpy(eth_hdr->ether_shost, old_eth_hdr->ether_dhost, ETHER_ADDR_LEN);
+          memcpy(eth_hdr->ether_dhost, old_eth_hdr->ether_shost, ETHER_ADDR_LEN);
+
+          /*  Populate ip header */
+          sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(pkt + eth_hdr_size);
+          ip_hdr->ip_v = 4;
+          ip_hdr->ip_hl = 5;
+          ip_hdr->tos = 0;
+          ip_hdr->ip_len =0;
+          ip_hdr->ip_id = 0;
+          ip_hdr->ip_off = htons(IP_DF);          //0x4000
+          ip_hdr->ip_ttl = 255;               //INIT_TTL
+          ip_hdr->ip_p = ip_protocol_icmp;        //1
+          ip_hdr->ip_sum = 0;               //compute after filling in ICMP header
+          ip_hdr->ip_src = old_ip_hdr->ip_dst;
+          ip_hdr->ip_dst = old_ip_hdr->ip_src;
+
+          /*  Populate ICMP header */
+          sr_icmp_t3_hdr_t *icmp_hdr = (sr_icmp_t3_hdr_t *)(pkt + eth_hdr_size + ip_hdr_size);
+          icmp_hdr->icmp_type = 3;
+          icmp_hdr->icmp_code = 1;
+          //icmp_hdr->unused =;
+          //icmp_hdr->next_mtu =;
+          // IP header plus first 64 bits (8 bytes) of original packet's data  
+          memcpy(icmp_hdr->data, buf + eth_hdr_size, ip_hdr->ip_hdr*4 + 8);
+          icmp_hdr->icmp_sum = cksum(pkt + eth_hdr_size + ip_hdr_size, icmp_hdr_size);
+          // no IP options -> 20 byte IP header
+          ip_hdr->ip_len = htons((ip_hl * 4) + icmp_hdr_size);
+          id_hdr->ip_sum = cksum(pkt + eth_hdr_size, ip_hdr_size);
+
+          /* Send ICMP packet */
+          printf("Send ICMP Host Unreachable\n");
+          print_hdrs(pkt, total_hdr_size);
+          sr_send_packet(sr, pkt, total_hdr_size, packet->iface)
+          free(pkt);
+      }
+/****** End Task 4-pt3  ******/
+        
       /*********************************************************************/
 
       sr_arpreq_destroy(&(sr->cache), req);
@@ -247,13 +307,45 @@ void sr_handlepacket_arp(struct sr_instance *sr, uint8_t *pkt,
     /* Process pending ARP request entry, if there is one */
     if (req != NULL)
     {
+        
       /*********************************************************************/
       /* TODO: send all packets on the req->packets linked list            */
+     
+/****** Begin Task 4-pt2  ******/
+      size_t eth_hdr_size = sizeof(sr_ethernet_hdr_t);
 
+      //arphdr->ar_sha;
+      for (packet = req->packets; packet != NULL; packet = packet->next) 
+      {
+        /*  Grab packet buffer from this packet in the queue */
+          uint8_t *buf = packet->buf;
 
+          /* Identify ethernet header of packet from the queue */
+          sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t  *) buf;
 
+          /*  Update destination MAC address to that from the ARP reply
+           *  message */
+          memcpy(eth_hdr->ether_dhost, arphdr->sha, ETHER_ADDR_LEN);
+          
+          /*  Update source MAC address to that of this device */
+          struct sr_if *sender_if = sr_get_interface(sr, interface);
+          memcpy(eth_hdr->ether_shost, sender_if, ETHER_ADDR_LEN);
+
+          /* Update IP header checksum and ttl */
+          sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(pkt + eth_hdr_size);
+          ip_hdr->ip_sum=0;
+          ip_hdr->ip_ttl -= 1;
+          ip_hdr->sum = = cksum(pkt + eth_hdr_size, ip_hdr_size);
+
+           /* Send packet */
+          printf("Send packet\n");
+          print_hdrs(pkt, total_hdr_size);
+          sr_send_packet(sr, buf, packet->len, src_iface);
+          
+      }
+/****** End Task 4-pt2  ******/
       /*********************************************************************/
-
+        
       /* Release ARP request entry */
       sr_arpreq_destroy(&(sr->cache), req);
     }
@@ -302,3 +394,53 @@ void sr_handlepacket(struct sr_instance* sr,
 
 }/* end sr_ForwardPacket */
 
+/****** Begin Task 4-pt1  ******/
+/*---------------------------------------------------------------------
+ * Method: sr_fwd_packet(struct sr_instance* sr,
+          uint8_t * packet,
+          unsigned int len,
+          char* interface,
+          unsigned char mac[6])
+ *
+ * Scope:  Global
+ *
+ * This method is called in sr_handlepacket() each time the router receives 
+ * an ip packet on the interface.  The packet buffer, the packet length the 
+ * receiving interface, and the MAC address determined in Task 3 are passed 
+ * in as parameters. The packet is sent to the MAC address passed in.
+ *
+ * Note: The call should look like:
+ * sr_fwd_packet(sr, packet, len, sr_rt(node)->interface, sr_arpentry->mac)
+ * Where:
+ *      * the sr_rt node is the node in the routing table whose destination
+ *        ip address matches the destination ip address of the packet. 
+ *      * sr_arpentry is returned by sr_arpcache_lookup in Task 3.
+ *
+ *---------------------------------------------------------------------*/
+
+  void sr_fwd_packet(struct sr_instance* sr,
+          uint8_t * packet,
+          unsigned int len,
+          char* interface,
+          unsigned char mac[6])
+  {
+          /* Identify ethernet header of packet from the queue */
+          sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t  *) packet;
+
+          /*  Update destination MAC address to that passed in
+           *  (Retrieved in Task 3) */
+          memcpy(eth_hdr->ether_dhost, mac, ETHER_ADDR_LEN);
+
+          /* Update IP header checksum and ttl */
+          sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(packet + eth_hdr_size);
+          ip_hdr->ip_sum=0;
+          ip_hdr->ip_ttl -= 1;
+          ip_hdr->sum = = cksum(pkt + eth_hdr_size, ip_hdr_size);
+
+           /* Send packet */
+          printf("Send packet using MAC address in the cache.\n");
+          //print_hdrs(pkt, total_hdr_size);
+          sr_send_packet(sr, packet, len, src_iface);
+
+  } /* End sr_sendpacket */
+/****** End Task 4-pt1  ******/
