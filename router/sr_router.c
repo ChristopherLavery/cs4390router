@@ -171,7 +171,7 @@ void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req,
       /* TODO: send ICMP host uncreachable to the source address of all    */
       /* packets waiting on this request                                   */
       
-/****** End Task 4-pt3  ******/
+/****** Begin Task 4-pt3  ******/
       size_t eth_hdr_size = sizeof(sr_ethernet_hdr_t);
       size_t ip_hdr_size = sizeof(sr_ip_hdr_t);
       size_t icmp_hdr_size = sizeof(sr_icmp_t3_hdr_t);
