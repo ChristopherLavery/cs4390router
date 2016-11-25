@@ -389,21 +389,58 @@ void sr_handlepacket(struct sr_instance* sr,
   /* TODO: Handle packets                                                  */
 
 
-  /****** Begin Task 2-pt1 - Patrick  ******/
-  /* How big is the ethernet header?
-     Use this to offset and find the start of the IP header. */
+  /****** Begin Task 2 - Patrick ******/
+  /* 
+     Part 1
+     Decrement Time to Live (TTL) and update checksum
+  */
   size_t eth_hdr_size = sizeof(sr_ethernet_hdr_t);
+  size_t ip_hdr_size = sizeof(sr_ip_hdr_t);
   sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(packet + eth_hdr_size);
-  /* Decrement TTL and update checksum */
   ip_hdr->ip_sum = 0;
   ip_hdr->ip_ttl -= 1;
-  size_t ip_hdr_size = sizeof(sr_ip_hdr_t);
   ip_hdr->ip_sum = cksum(packet + eth_hdr_size, ip_hdr_size);
-  /* End   Task 2-pt1
-     
-     Begin Task 2-pt2 */
-  
-
+  /************************************* 
+    Task 2
+    Part 2
+  **************************************
+    Find the longest prefix match (LPM) in the routing table. 
+    Fortunately, all the masks provided in the routing table are 255.255.255.255.
+    The "next hop" address is the gateway address of the LMP row on the routing table.
+    If the gateways were anything but 255.255.255.255, we'd have to check specific bits to find LPM.
+    We might still have to do that. For now, I'm checking if the addresses are completely equal.
+    - Pat
+  */
+  struct sr_rt *rt_row = sr->routing_table; // Routing table first row (linked list first node)
+  uint32_t ip_dst = ip_hdr->ip_dst;         // Destination addr of our IP packet
+  struct sr_rt *rt_bestrow = NULL;          // Tentative best match
+  // Loop through each row and find the longest prefix match.
+  while(rt_row != NULL) {
+    uint32_t rt_row_dest = (uint32_t)(rt_row->dest);
+    uint32_t rt_row_mask = (uint32_t)(rt_row->mask);
+    if ((ip_dst & rt_row_mask) == rt_row_dest) {
+      // Found a prefix match. Is it the longest?
+      if (rt_row_mask > (rt_bestrow == NULL ? 0 : rt_bestrow->mask)) {
+        rt_bestrow = rt_row;
+      }
+    }
+    rt_row = rt_row->next;
+  }
+  // Validate our results and find the destination MAC address in the arp cache
+  struct sr_arpentry *lookup;
+  bool fail = rt_bestrow == NULL;
+  if (!fail)
+    lookup = sr_arpcache_lookup(&sr_instance->cache, (uint32_t)rt_bestrow->dest);
+  fail |= lookup == NULL;
+  if (fail) {
+    // Task 12 - send an ICMP Host Unreachable message because we never found it
+    // TODO
+  }
+  else {
+    // Success
+    sr_fwd_packet(sr, packet, len, rt_bestrow->interface, lookup->mac);
+    free(lookup);
+  }
   /******  End Task 2 - Patrick   ******/
 
 
