@@ -335,7 +335,7 @@ void sr_handlepacket_arp(struct sr_instance *sr, uint8_t *pkt,
           sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(pkt + eth_hdr_size);
           ip_hdr->ip_sum=0;
           ip_hdr->ip_ttl -= 1;
-          ip_hdr->sum = = cksum(pkt + eth_hdr_size, ip_hdr_size);
+          ip_hdr->sum = cksum(pkt + eth_hdr_size, ip_hdr_size);
 
            /* Send packet */
           printf("Send packet\n");
@@ -388,6 +388,23 @@ void sr_handlepacket(struct sr_instance* sr,
   /*************************************************************************/
   /* TODO: Handle packets                                                  */
 
+
+  /****** Begin Task 2-pt1 - Patrick  ******/
+  /* How big is the ethernet header?
+     Use this to offset and find the start of the IP header. */
+  size_t eth_hdr_size = sizeof(sr_ethernet_hdr_t);
+  sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(packet + eth_hdr_size);
+  /* Decrement TTL and update checksum */
+  ip_hdr->ip_sum = 0;
+  ip_hdr->ip_ttl -= 1;
+  size_t ip_hdr_size = sizeof(sr_ip_hdr_t);
+  ip_hdr->ip_sum = cksum(packet + eth_hdr_size, ip_hdr_size);
+  /* End   Task 2-pt1
+     
+     Begin Task 2-pt2 */
+  
+
+  /******  End Task 2 - Patrick   ******/
 
 
   /*************************************************************************/
