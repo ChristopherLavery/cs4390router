@@ -472,7 +472,7 @@ void sr_handlepacket(struct sr_instance* sr,
     printf("Send ICMP Host Unreachable\n");
     print_hdrs(pkt, total_hdr_size);
     sr_send_packet(sr, pkt, total_hdr_size, packet->iface);
-    free(packet);
+    free(pkt);
   }
   else {
     // Success
@@ -480,10 +480,7 @@ void sr_handlepacket(struct sr_instance* sr,
     free(lookup);
   }
   /******  End Task 2 - Patrick   ******/
-
-
   /*************************************************************************/
-
 }/* end sr_ForwardPacket */
 
 /****** Begin Task 4-pt1  ******/
