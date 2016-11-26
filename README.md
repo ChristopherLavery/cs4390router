@@ -10,18 +10,18 @@ A simple IP router for CS4390 (Computer Networks) using mininet. For setup, use 
 | 2. Handle ARP request - Task 3                                                      	| 2      	|
 | 3. Drop IP packet with wrong checksum - Task 1                                      	| 2      	|
 | 4. Forwarded UDP packet reaches server1 - Task 3 & 4                                	| 2      	|
-| 5. Forwarded UDP packet has decreased TTL - Task 2                                  	| 2      	|
-| 6. Forwarded UDP packet has re-calculated checksum - Task 2                         	| 2      	|
+| 5. ~~Forwarded UDP packet has decreased TTL - Task 2~~                                | 2      	|
+| 6. ~~Forwarded UDP packet has re-calculated checksum - Task 2~~                       | 2      	|
 | 7. Ping packet is forwarded to the server - Task 3 & 4                              	| 2      	|
 | 8. Ping 192.168.2.2 from client succeeds - Task 1                                   	| 2      	|
 | 9. Ping 172.64.3.10 from server1 succeeds - Task 1                                  	| 2      	|
 | 10. wget 192.168.2.2 from client succeeds - Task 3 & 4                              	| 2      	|
 | 11. Time exceeded message is generated when TTL=1 - Task 1                          	| 2      	|
-| 12. Network unreachable message is generated when no routing entry matches - Task 2 	| 2      	|
+| 12. ~~Network unreachable message is generated when no routing entry matches - Task 2~~| 2      	|
 | 13. Host unreachable message is generated when ARP resolution fails - Task 4        	| 2      	|
 | 14. Packets are forwarded when they match a subnet routing entry - Task 3 & 4       	| 2      	|
 | 15. Packets are forwarded to the gateway - Task 3 & 4                               	| 1      	|
-| 16. Route lookups perform a longest prefix match - Task 2                           	| 1      	|
+| 16. ~~Route lookups perform a longest prefix match - Task 2~~                         | 1      	|
 | 17. Traceroute succeeds - Task 1                                                    	| 1      	|
 | Total                                                                               	| 30     	|
 
