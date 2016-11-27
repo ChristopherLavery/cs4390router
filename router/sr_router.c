@@ -387,7 +387,16 @@ void sr_handlepacket(struct sr_instance* sr,
 
   /*************************************************************************/
   /* TODO: Handle packets                                                  */
-	/****** Begin Task 1 ******/  
+	/****** Begin Task 1 - Daniel ******/  
+	
+	//Deep copy of the old packet to pointer newPacket 
+	uint8_t* newPacket = malloc(len);
+	memcpy(newPacket,packet,len);
+	
+	sr_ethernet_hdr_t* etherHdr = (sr_ethernet_hdr_t*) newPacket;
+	sr_ip_hdr_t* ipHdr = (sr_ip_hdr_t*)(newPacket + sizeof(sr_ethernet_hdr_t));
+	sr_icmp_t3_hdr_t* icmpHdr = (sr_icmp_t3_hdr_t*)(newPacket + sizeof(sr_ethernet_hdr_t) + sizeof(ip_hdr_size));
+	
 	
 	size_t eth_hdr_size = sizeof(sr_ethernet_hdr_t);
     size_t ip_hdr_size = sizeof(sr_ip_hdr_t);
@@ -402,9 +411,7 @@ void sr_handlepacket(struct sr_instance* sr,
 	}
   
 	//verify checksum
-	//IHL's digits (bits 4 through 8 of IP header) indicate the length of the header (14+1/2 - how to offset by 1/2 a byte?)
-	//Checksum is 10+14 bytes offset from start, 2 bytes long 
-	uint16_t checksum = cksum(packet[28], (packet[15]));
+	uint16_t checksum = cksum(ipHdr, newPacket->ip_hl);
 
 	if(checksum != 0){
 		printf("Packet checksum is incorrect => drop packet\n");
@@ -412,23 +419,15 @@ void sr_handlepacket(struct sr_instance* sr,
 	}
   
 	//Verify TTL; if 1, send ICMP time exceeded back to host
-	//TTL is 8+14 bytes from start
-	if(packet[22] == 1){
+	if(newPacket->ip_ttl == 1){
 		
-		size_t eth_hdr_size = sizeof(sr_ethernet_hdr_t);
-		size_t ip_hdr_size = sizeof(sr_ip_hdr_t);
-		size_t icmp_hdr_size = sizeof(sr_icmp_t3_hdr_t);
-
-		size_t total_hdr_size = eth_hdr_size + ip_hdr_size + icmp_hdr_size;
-	  	  
 		//TODO: Create ICMP Header, encapsulate with IP Header, encapsulate with Ethernet frame, and send it back to the host 
-		
-		struct sr_packet *newpacket;
+		struct sr_packet *newPkt;
 		
 		/*  Grab packet buffer from this packet in the queue */
-		uint8_t *buf = newpacket->buf;
+		uint8_t *buf = newPkt->buf;
 
-		/*  Create the packet buffer to hold ICMP Host Unreachable message */
+		/*  Create the packet buffer to hold ICMP Time Exceeded message */
 		uint8_t *pkt = (uint8_t *) malloc(total_hdr_size);
 
 		/* Identify ethernet and ip headers of packet from the queue */
@@ -457,8 +456,8 @@ void sr_handlepacket(struct sr_instance* sr,
 
 		/*  Populate ICMP header */
 		sr_icmp_t3_hdr_t *icmp_hdr = (sr_icmp_t3_hdr_t *)(pkt + eth_hdr_size + ip_hdr_size);
-		icmp_hdr->icmp_type = 11;
-		icmp_hdr->icmp_code = 0;
+		icmp_hdr->icmp_type = 11;		//Type 11 - Time Exceeded
+		icmp_hdr->icmp_code = 0;			//Code 0 - Expired in transit
 		//icmp_hdr->unused =;
 		//icmp_hdr->next_mtu =;
 		// IP header plus first 64 bits (8 bytes) of original packet's data  
@@ -471,49 +470,124 @@ void sr_handlepacket(struct sr_instance* sr,
 		/* Send ICMP packet */
 		printf("Send ICMP Time Exceeded\n");
 		print_hdrs(pkt, total_hdr_size);
-		sr_send_packet(sr, pkt, total_hdr_size, newpacket->iface);
+		sr_send_packet(sr, pkt, total_hdr_size, newPkt->iface);
 		
 		return;
 	}
   
 	//recieving address is 16+14 bytes from start
-	uint32_t address = packet[30];
+	uint32_t address = newPacket->ip_dst;
 	//if packet destination matches this address, check the protocol 
 	if (address == sr->sr_addr.sin_addr.s_addr){
 		
 		//protocol is 1 byte, offset 9+14 bytes from start
-		uint8_t protocol = packet[23];
+		uint8_t protocol = ip_p;
 		//if ICMP, ping ICMP Echo reply
 		if(protocol == 1){
 			
-			//TODO: Create ICMP Header, encapsulate with IP Header, encapsulate with Ethernet frame, and send it back to the host 
-			sr_icmp_hdr *icmp_response = NULL;
-			icmp_response = malloc(4);
-			icmp_response->icmp_type = 0;
-			icmp_response->icmp_sum = cksum(icmp_response, sizeof(icmp_response));
-			
-			//Missing code here
+		//TODO: Create ICMP Header, encapsulate with IP Header, encapsulate with Ethernet frame, and send it back to the host 
+		struct sr_packet *newPkt;
+		
+		/*  Grab packet buffer from this packet in the queue */
+		uint8_t *buf = newPkt->buf;
+
+		/*  Create the packet buffer to hold ICMP Echo Reply message */
+		uint8_t *pkt = (uint8_t *) malloc(total_hdr_size);
+
+		/* Identify ethernet and ip headers of packet from the queue */
+		sr_ethernet_hdr_t *old_eth_hdr = (sr_ethernet_hdr_t  *) buf;
+		sr_ip_hdr_t *old_ip_hdr = (sr_ip_hdr_t *)(buf + eth_hdr_size);
+
+		/*  Popoulate ethernet header */
+		sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t *) pkt;
+		eth_hdr->ether_type = htons(ethertype_ip);
+		memcpy(eth_hdr->ether_shost, old_eth_hdr->ether_dhost, ETHER_ADDR_LEN);
+		memcpy(eth_hdr->ether_dhost, old_eth_hdr->ether_shost, ETHER_ADDR_LEN);
+
+		/*  Populate ip header */
+		sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(pkt + eth_hdr_size);
+		ip_hdr->ip_v = 4;
+		ip_hdr->ip_hl = 5;
+		ip_hdr->tos = 0;
+		ip_hdr->ip_len =0;
+		ip_hdr->ip_id = 0;
+		ip_hdr->ip_off = htons(IP_DF);          //0x4000
+		ip_hdr->ip_ttl = 255;               //INIT_TTL
+		ip_hdr->ip_p = ip_protocol_icmp;        //1
+		ip_hdr->ip_sum = 0;               //compute after filling in ICMP header
+		ip_hdr->ip_src = old_ip_hdr->ip_dst;
+		ip_hdr->ip_dst = old_ip_hdr->ip_src;
+
+		/*  Populate ICMP header */
+		sr_icmp_t3_hdr_t *icmp_hdr = (sr_icmp_t3_hdr_t *)(pkt + eth_hdr_size + ip_hdr_size);
+		icmp_hdr->icmp_type = 0;		//Type 0 - Echo reply
+		icmp_hdr->icmp_code = 0;			//Code 0 - Echo reply
+		//icmp_hdr->unused =;
+		//icmp_hdr->next_mtu =;
+		// IP header plus first 64 bits (8 bytes) of original packet's data  
+		memcpy(icmp_hdr->data, buf + eth_hdr_size, ip_hdr->ip_hdr*4 + 8);
+		icmp_hdr->icmp_sum = cksum(pkt + eth_hdr_size + ip_hdr_size, icmp_hdr_size);
+		// no IP options -> 20 byte IP header
+		ip_hdr->ip_len = htons((ip_hl * 4) + icmp_hdr_size);
+		id_hdr->ip_sum = cksum(pkt + eth_hdr_size, ip_hdr_size);
 			
 			printf("Send ICMP Echo Reply\n");
-/* 			print_hdrs(pkt, total_hdr_size);
-			sr_send_packet(sr, pkt, total_hdr_size, packet->iface); */
+			print_hdrs(pkt, total_hdr_size);
+			sr_send_packet(sr, pkt, total_hdr_size, packet->iface); 
 			
 		}
 		//if TCP/UDP, send ICMP port unreachable to sending host
 		else if(protocol == 6 || protocol == 17){
 			
-			//TODO: Create ICMP Header, encapsulate with IP Header, encapsulate with Ethernet frame, and send it back to the host 
-			sr_icmp_t3_hdr *icmp_response = NULL;
-			icmp_response = malloc(4);
-			icmp_response->icmp_type = 3;
-			icmp_response->icmp_code = 3;
-			icmp_response->icmp_sum = cksum(icmp_response, sizeof(icmp_response));
-			
-			//Missing code here 
+		//TODO: Create ICMP Header, encapsulate with IP Header, encapsulate with Ethernet frame, and send it back to the host 
+		struct sr_packet *newPkt;
+		
+		/*  Grab packet buffer from this packet in the queue */
+		uint8_t *buf = newPkt->buf;
+
+		/*  Create the packet buffer to hold ICMP Port Unreachable message */
+		uint8_t *pkt = (uint8_t *) malloc(total_hdr_size);
+
+		/* Identify ethernet and ip headers of packet from the queue */
+		sr_ethernet_hdr_t *old_eth_hdr = (sr_ethernet_hdr_t  *) buf;
+		sr_ip_hdr_t *old_ip_hdr = (sr_ip_hdr_t *)(buf + eth_hdr_size);
+
+		/*  Popoulate ethernet header */
+		sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t *) pkt;
+		eth_hdr->ether_type = htons(ethertype_ip);
+		memcpy(eth_hdr->ether_shost, old_eth_hdr->ether_dhost, ETHER_ADDR_LEN);
+		memcpy(eth_hdr->ether_dhost, old_eth_hdr->ether_shost, ETHER_ADDR_LEN);
+
+		/*  Populate ip header */
+		sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(pkt + eth_hdr_size);
+		ip_hdr->ip_v = 4;
+		ip_hdr->ip_hl = 5;
+		ip_hdr->tos = 0;
+		ip_hdr->ip_len =0;
+		ip_hdr->ip_id = 0;
+		ip_hdr->ip_off = htons(IP_DF);          //0x4000
+		ip_hdr->ip_ttl = 255;               //INIT_TTL
+		ip_hdr->ip_p = ip_protocol_icmp;        //1
+		ip_hdr->ip_sum = 0;               //compute after filling in ICMP header
+		ip_hdr->ip_src = old_ip_hdr->ip_dst;
+		ip_hdr->ip_dst = old_ip_hdr->ip_src;
+
+		/*  Populate ICMP header */
+		sr_icmp_t3_hdr_t *icmp_hdr = (sr_icmp_t3_hdr_t *)(pkt + eth_hdr_size + ip_hdr_size);
+		icmp_hdr->icmp_type = 3;		//Type 3 - Destination unreachable 
+		icmp_hdr->icmp_code = 3;			//Code 3 - Port unreachable
+		//icmp_hdr->unused =;
+		//icmp_hdr->next_mtu =;
+		// IP header plus first 64 bits (8 bytes) of original packet's data  
+		memcpy(icmp_hdr->data, buf + eth_hdr_size, ip_hdr->ip_hdr*4 + 8);
+		icmp_hdr->icmp_sum = cksum(pkt + eth_hdr_size + ip_hdr_size, icmp_hdr_size);
+		// no IP options -> 20 byte IP header
+		ip_hdr->ip_len = htons((ip_hl * 4) + icmp_hdr_size);
+		id_hdr->ip_sum = cksum(pkt + eth_hdr_size, ip_hdr_size);
 					
 			printf("Send ICMP Host Unreachable\n");
-/* 			print_hdrs(pkt, total_hdr_size);
-			sr_send_packet(sr, pkt, total_hdr_size, packet->iface); */
+ 			print_hdrs(pkt, total_hdr_size);
+			sr_send_packet(sr, pkt, total_hdr_size, packet->iface); 
 		}
 
 	}
@@ -521,7 +595,7 @@ void sr_handlepacket(struct sr_instance* sr,
 		return;
 	}
 	
-	/****** End Task 1 ******/
+	/****** End Task 1 - Daniel ******/
 
   /****** Begin Task 2 - Patrick ******/
   /* 
