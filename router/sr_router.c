@@ -223,7 +223,7 @@ void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req,
           memcpy(icmp_hdr->data, buf + eth_hdr_size, ip_hdr->ip_hdr*4 + 8);
           icmp_hdr->icmp_sum = cksum(pkt + eth_hdr_size + ip_hdr_size, icmp_hdr_size);
           // no IP options -> 20 byte IP header
-          ip_hdr->ip_len = htons((ip_hl * 4) + icmp_hdr_size);
+          ip_hdr->ip_len = htons((ip_hdr->ip_hl * 4) + icmp_hdr_size);
           id_hdr->ip_sum = cksum(pkt + eth_hdr_size, ip_hdr_size);
 
           /* Send ICMP packet */
@@ -464,7 +464,7 @@ void sr_handlepacket(struct sr_instance* sr,
 		memcpy(icmp_hdr->data, buf + eth_hdr_size, ip_hdr->ip_hdr*4 + 8);
 		icmp_hdr->icmp_sum = cksum(pkt + eth_hdr_size + ip_hdr_size, icmp_hdr_size);
 		// no IP options -> 20 byte IP header
-		ip_hdr->ip_len = htons((ip_hl * 4) + icmp_hdr_size);
+		ip_hdr->ip_len = htons((ip_hdr->ip_hl * 4) + icmp_hdr_size);
 		id_hdr->ip_sum = cksum(pkt + eth_hdr_size, ip_hdr_size);
 
 		/* Send ICMP packet */
@@ -528,7 +528,7 @@ void sr_handlepacket(struct sr_instance* sr,
 		memcpy(icmp_hdr->data, buf + eth_hdr_size, ip_hdr->ip_hdr*4 + 8);
 		icmp_hdr->icmp_sum = cksum(pkt + eth_hdr_size + ip_hdr_size, icmp_hdr_size);
 		// no IP options -> 20 byte IP header
-		ip_hdr->ip_len = htons((ip_hl * 4) + icmp_hdr_size);
+		ip_hdr->ip_len = htons((ip_hdr->ip_hl * 4) + icmp_hdr_size);
 		id_hdr->ip_sum = cksum(pkt + eth_hdr_size, ip_hdr_size);
 			
 			printf("Send ICMP Echo Reply\n");
@@ -582,7 +582,7 @@ void sr_handlepacket(struct sr_instance* sr,
 		memcpy(icmp_hdr->data, buf + eth_hdr_size, ip_hdr->ip_hdr*4 + 8);
 		icmp_hdr->icmp_sum = cksum(pkt + eth_hdr_size + ip_hdr_size, icmp_hdr_size);
 		// no IP options -> 20 byte IP header
-		ip_hdr->ip_len = htons((ip_hl * 4) + icmp_hdr_size);
+		ip_hdr->ip_len = htons((ip_hdr->ip_hl * 4) + icmp_hdr_size);
 		id_hdr->ip_sum = cksum(pkt + eth_hdr_size, ip_hdr_size);
 					
 			printf("Send ICMP Host Unreachable\n");
@@ -732,7 +732,7 @@ void sr_handlepacket(struct sr_instance* sr,
           sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(packet + eth_hdr_size);
           ip_hdr->ip_sum=0;
           ip_hdr->ip_ttl -= 1;
-          ip_hdr->sum = = cksum(pkt + eth_hdr_size, ip_hdr_size);
+          ip_hdr->sum = cksum(pkt + eth_hdr_size, ip_hdr_size);
 
            /* Send packet */
           printf("Send packet using MAC address in the cache.\n");
