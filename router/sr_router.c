@@ -635,11 +635,7 @@ void sr_handlepacket(struct sr_instance* sr,
     rt_row = rt_row->next;
   }
   // Validate our results and find the destination MAC address in the arp cache
-  struct sr_arpentry *lookup;
   bool fail = rt_bestrow == NULL;
-  if (!fail)
-    lookup = sr_arpcache_lookup(&sr_instance->cache, (uint32_t)rt_bestrow->dest);
-  fail |= lookup == NULL;
   if (fail) {
     /* 
       Task 12 - send an ICMP Host Unreachable message because we never found it
@@ -681,14 +677,44 @@ void sr_handlepacket(struct sr_instance* sr,
     print_hdrs(pkt, total_hdr_size);
     sr_send_packet(sr, pkt, total_hdr_size, packet->iface);
     free(pkt);
-  }
-  else {
-    // Success
-    sr_fwd_packet(sr, packet, len, rt_bestrow->interface, lookup->mac);
-    free(lookup);
-  }
+  } else {
   /******  End Task 2 - Patrick   ******/
   /*************************************************************************/
+  
+  /****** Begin Task 3 - Chris *******/
+  /***** Task 3 part 1 *******/
+
+		// Examine packet to see if it's an ARP Packet
+		bool isArpPkt = false;
+		
+		if(etherHdr->ether_type == htons(ethertype_arp)){
+			isArpPkt = true;
+		}
+		
+		// if it is an ARP packet,call sr_handlepacket_arp using the interface found in task 2
+		if(isArpPkt){	
+			sr_handlepacket_arp(sr, packet, len, rt_bestrow->interface);
+
+		// if not an ARP packet, check to see if destination is in the arpcache
+		} else {	
+			struct sr_arpentry *lookup;
+			lookup = sr_arpcache_lookup(&sr_instance->cache, (uint32_t)rt_bestrow->dest);
+			
+  /*********** Task 3 part 2 *********/		
+			// if ip destination was Not in cache, request MAC address
+			if(lookup == NULL){			
+				sr_waitforarp(sr, packet, len, (uint32_t)rt_bestrow->dest, rt_bestrow->interface);
+				
+			// if ip destination was in the cache, send to the MAC from the lookup
+			}  else {	  
+				// Success
+				sr_fwd_packet(sr, packet, len, rt_bestrow->interface, lookup->mac);
+			
+			}
+			free(lookup);
+		}
+	}
+	/***** End Task 3 ********/  
 }/* end sr_ForwardPacket */
 
 /****** Begin Task 4-pt1  ******/
